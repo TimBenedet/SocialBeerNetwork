@@ -5,67 +5,70 @@ const { useState, useEffect, useRef } = React;
 /* ============================== PROFILE ============================== */
 function ProfileScreen({ onOpenBeer }) {
   const me = USERS.me;
+  const journalCount = JOURNAL.reduce((n,g)=>n+(g.entries?.length||0),0);
   return (
     <div className="page">
       <div className="prof-hero">
         <div className="avatar big-av" style={{ background:me.color }}>{me.init}</div>
         <div>
-          <div className="prof-name">Timothée Bénédet</div>
-          <div className="prof-handle">@timothee · Lyon · Membre depuis 2023</div>
+          <div className="prof-name">{me.name}</div>
+          <div className="prof-handle">{me.handle}</div>
           <div style={{display:'flex',gap:9,marginTop:14,flexWrap:'wrap'}}>
             <button className="btn sm"><Icon name="pen" size={14}/> Éditer le profil</button>
           </div>
         </div>
       </div>
 
-      <div className="prof-stats">
-        <div className="prof-stat"><div className="v">218</div><div className="k">Dégustations</div></div>
-        <div className="prof-stat"><div className="v">96</div><div className="k">Bières uniques</div></div>
-        <div className="prof-stat"><div className="v">31</div><div className="k">Styles explorés</div></div>
-        <div className="prof-stat"><div className="v">47</div><div className="k">Coups de cœur</div></div>
-        <div className="prof-stat"><div className="v">12</div><div className="k">Badges</div></div>
-      </div>
-
       <div className="block">
         <div className="section-title">Ton palais, en un coup d'œil</div>
         <div className="section-note">Les ressentis qui reviennent le plus dans ton carnet.</div>
-        <div className="taste-profile">
-          {ME_TASTE.map((t,i) => (
-            <span key={t} className={'tag ' + (i<3?'solid':'')} style={{ fontSize: 15 - i*0.6, padding:'7px 15px' }}>{t}</span>
-          ))}
-        </div>
+        {ME_TASTE.length ? (
+          <div className="taste-profile">
+            {ME_TASTE.map((t,i) => (
+              <span key={t} className={'tag ' + (i<3?'solid':'')} style={{ fontSize: 15 - i*0.6, padding:'7px 15px' }}>{t}</span>
+            ))}
+          </div>
+        ) : (
+          <p style={{color:'var(--ink-mute)'}}>Ton profil de goût se construira au fil de tes dégustations.</p>
+        )}
       </div>
 
       <div className="block">
         <div className="section-title">Ton carnet de dégustation</div>
         <div className="section-note">Chaque bière, ce qu'elle t'a fait ressentir.</div>
-        <div className="journal">
-          {JOURNAL.map(group => (
-            <div key={group.month}>
-              <div className="journal-month">{group.month}</div>
-              {group.entries.map((e,i) => {
-                const beer = beerById(e.beerId);
-                return (
-                  <div key={i} className="j-entry" onClick={()=>onOpenBeer(e.beerId)}>
-                    <div className="j-glass" style={{ background: BEER_HUES[beer.hue].glow }}>
-                      <Glass hue={beer.hue} w={26} fill={beer.glassFill}/>
-                    </div>
-                    <div>
-                      <div className="j-name">{beer.name}</div>
-                      <div className="j-brew">{BREWERIES[beer.brewery].name}</div>
-                      <div className="j-tags">
-                        <Verdict v={e.verdict} />
-                        {e.feelings.map(f=><Tag key={f} variant="tint">{f}</Tag>)}
-                        {e.characters.map(f=><Tag key={f}>{f}</Tag>)}
+        {journalCount ? (
+          <div className="journal">
+            {JOURNAL.map(group => (
+              <div key={group.month}>
+                <div className="journal-month">{group.month}</div>
+                {group.entries.map((e,i) => {
+                  const beer = beerById(e.beerId);
+                  if (!beer) return null;
+                  const brew = BREWERIES[beer.brewery] || { name:'' };
+                  return (
+                    <div key={i} className="j-entry" onClick={()=>onOpenBeer(e.beerId)}>
+                      <div className="j-glass" style={{ background: BEER_HUES[beer.hue].glow }}>
+                        <Glass hue={beer.hue} w={26} fill={beer.glassFill}/>
                       </div>
+                      <div>
+                        <div className="j-name">{beer.name}</div>
+                        <div className="j-brew">{brew.name}</div>
+                        <div className="j-tags">
+                          <Verdict v={e.verdict} />
+                          {(e.feelings||[]).map(f=><Tag key={f} variant="tint">{f}</Tag>)}
+                          {(e.characters||[]).map(f=><Tag key={f}>{f}</Tag>)}
+                        </div>
+                      </div>
+                      <div className="j-date">{e.date}</div>
                     </div>
-                    <div className="j-date">{e.date}</div>
-                  </div>
-                );
-              })}
-            </div>
-          ))}
-        </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p style={{color:'var(--ink-mute)',padding:'12px 0'}}>Ton carnet est vide pour l'instant. Tes dégustations apparaîtront ici.</p>
+        )}
       </div>
     </div>
   );
@@ -96,6 +99,7 @@ function BadgesScreen() {
       <div className="block">
         <div className="section-title">Défis en cours</div>
         <div className="section-note">Ils se renouvellent chaque semaine.</div>
+        {!CHALLENGES.length && <p style={{color:'var(--ink-mute)'}}>Aucun défi en cours pour le moment.</p>}
         {CHALLENGES.map(ch => (
           <div key={ch.id} className="challenge">
             <div className="challenge-ic"><Icon name={ch.icon}/></div>
@@ -115,6 +119,7 @@ function BadgesScreen() {
 
       <div className="block">
         <div className="section-title">Badges obtenus <span style={{color:'var(--ink-faint)',fontFamily:'var(--font-ui)',fontSize:16,fontWeight:600}}>· {earned.length}</span></div>
+        {!earned.length && <p style={{color:'var(--ink-mute)'}}>Tu n'as pas encore débloqué de badge.</p>}
         <div className="badge-grid" style={{marginTop:14}}>
           {earned.map(b => (
             <div key={b.id} className="badge">
@@ -219,7 +224,7 @@ function MapScreen() {
       return [...VENUES, ...saved];
     } catch (e) { return VENUES; }
   });
-  const [active, setActive] = useState(VENUES[0].id);
+  const [active, setActive] = useState(() => (venues[0] ? venues[0].id : null));
   const [adding, setAdding] = useState(false);
 
   const addVenue = (v) => {
@@ -233,7 +238,7 @@ function MapScreen() {
     <div className="page">
       <div className="page-head map-head">
         <div>
-          <div className="page-kicker">Autour de toi · Lyon</div>
+          <div className="page-kicker">Autour de toi</div>
           <h1 className="page-title">Bars & brasseries</h1>
         </div>
         <button className={'btn ' + (adding ? '' : 'primary')} onClick={()=>setAdding(a=>!a)}>
@@ -243,6 +248,9 @@ function MapScreen() {
       <div className="map-layout">
         <div className="map-list">
           {adding && <AddVenueForm onAdd={addVenue} onClose={()=>setAdding(false)} existing={venues} />}
+          {!venues.length && !adding && (
+            <div style={{color:'var(--ink-mute)',padding:'24px 4px'}}>Aucun lieu enregistré. Ajoute une adresse pour la voir sur la carte.</div>
+          )}
           {venues.map(v => (
             <div key={v.id} className={'map-list-item' + (active===v.id?' active':'')} onClick={()=>setActive(v.id)}>
               <div className="ic"><Icon name="pin" size={18}/></div>

@@ -16,9 +16,18 @@ const VCOLOR = { love:'var(--v-love)', again:'var(--v-again)', fine:'var(--v-fin
 
 function BeerDetail({ beerId, onOpenBeer, onCheckin }) {
   const beer = beerById(beerId);
-  const brew = BREWERIES[beer.brewery];
+  if (!beer) {
+    return (
+      <div className="page">
+        <button className="btn ghost sm" style={{marginBottom:22}} onClick={()=>onOpenBeer(null)}><Icon name="arrowL" size={15}/> Retour</button>
+        <p style={{color:'var(--ink-mute)',padding:'40px 0'}}>Cette bière n'existe pas (ou plus).</p>
+      </div>
+    );
+  }
+  const brew = BREWERIES[beer.brewery] || { name:'', city:'' };
   const c = BEER_HUES[beer.hue];
-  const topV = Object.entries(beer.verdicts).sort((a,b)=>b[1]-a[1])[0][0];
+  const verdictEntries = Object.entries(beer.verdicts || {});
+  const topV = verdictEntries.length ? verdictEntries.sort((a,b)=>b[1]-a[1])[0][0] : null;
   const similar = BEERS.filter(b=>b.id!==beerId && b.style.includes(beer.style.split(' ').pop())).slice(0,4);
   const fallbackSimilar = BEERS.filter(b=>b.id!==beerId).slice(0,4);
   const sim = (similar.length?similar:fallbackSimilar).slice(0,4);
@@ -40,8 +49,8 @@ function BeerDetail({ beerId, onOpenBeer, onCheckin }) {
           <h1>{beer.name}</h1>
           <div className="brew">{brew.name} · {brew.city}</div>
           <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:4}}>
-            <Verdict v={topV} />
-            <Tag><Icon name="user" size={13}/>&nbsp;{(beer.checkins/1000).toFixed(1)}k dégustations</Tag>
+            {topV && <Verdict v={topV} />}
+            {beer.checkins ? <Tag><Icon name="user" size={13}/>&nbsp;{(beer.checkins/1000).toFixed(1)}k dégustations</Tag> : null}
           </div>
           <div className="beer-meta">
             <div className="m"><div className="v serif">{beer.abv}%</div><div className="k">Alcool</div></div>
@@ -62,20 +71,20 @@ function BeerDetail({ beerId, onOpenBeer, onCheckin }) {
         <div className="section-note">Pas de moyenne sur 5. Voici ce que les gens ont vraiment ressenti.</div>
         <div className="ressenti">
           <div className="ressenti-bars">
-            {Object.entries(beer.verdicts).map(([k,v]) => (
+            {Object.entries(beer.verdicts || {}).map(([k,v]) => (
               <RBar key={k} label={VERDICTS[k].label} pct={v} color={VCOLOR[k]} />
             ))}
           </div>
           <div>
             <div className="pick-cat" style={{marginTop:0}}>Ce qu'elle fait ressentir</div>
             <div className="tag-cloud" style={{marginBottom:18}}>
-              {beer.feelings.map(([f,n]) => (
+              {(beer.feelings || []).map(([f,n]) => (
                 <span key={f} className="tag tint" style={{ fontSize: 12 + n/14 }}>{f}<span style={{opacity:.5,marginLeft:4}}>{n}%</span></span>
               ))}
             </div>
             <div className="pick-cat">Son caractère</div>
             <div className="tag-cloud">
-              {beer.characters.map(([f,n]) => (
+              {(beer.characters || []).map(([f,n]) => (
                 <span key={f} className="tag" style={{ fontSize: 12 + n/16 }}><span className="dot"></span>{f}</span>
               ))}
             </div>

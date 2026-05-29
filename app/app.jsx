@@ -8,7 +8,7 @@ const NAV = [
   { id:'feed',     label:'Accueil',     icon:'home' },
   { id:'discover', label:'Découverte',  icon:'compass' },
   { id:'map',      label:'Carte',       icon:'map' },
-  { id:'badges',   label:'Défis',       icon:'trophy', badge:3 },
+  { id:'badges',   label:'Défis',       icon:'trophy' },
   { id:'profile',  label:'Carnet',      icon:'user' },
 ];
 
@@ -94,8 +94,8 @@ function App() {
         <button className="me-card" onClick={()=>nav('profile')}>
           <Avatar user="me" size={38}/>
           <div style={{textAlign:'left'}}>
-            <div className="name">Timothée Bénédet</div>
-            <div className="sub">@timothee</div>
+            <div className="name">{USERS.me.name}</div>
+            <div className="sub">{USERS.me.handle}</div>
           </div>
         </button>
       </nav>
