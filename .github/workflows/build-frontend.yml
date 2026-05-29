@@ -1,0 +1,65 @@
+name: Build and Push Frontend
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'app/**'
+      - 'Dockerfile'
+      - 'nginx.conf'
+      - '.github/workflows/build-frontend.yml'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/socialbeernetwork
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' }}
+            type=sha,prefix=main-
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          no-cache: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Update manifests with new image SHA
+        run: |
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          SHA_TAG="ghcr.io/${OWNER}/socialbeernetwork:main-$(echo ${{ github.sha }} | cut -c1-7)"
+          sed -i "s|image: ghcr.io/.*/socialbeernetwork:.*|image: ${SHA_TAG}|g" manifests/deployment.yaml
+
+      - name: Commit and push updated manifests
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add manifests/deployment.yaml
+          git diff --staged --quiet || git commit -m "ci: update image to main-$(echo ${{ github.sha }} | cut -c1-7)"
+          git push

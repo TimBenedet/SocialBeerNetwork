@@ -1,8 +1,0 @@
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-# Permet de tout déployer d'un coup : kubectl apply -k k8s/
-resources:
-  - deployment.yaml
-  - service.yaml
-  - ingress.yaml
