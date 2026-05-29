@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: untappd-reborn
+  labels:
+    app: untappd-reborn
+spec:
+  type: ClusterIP
+  selector:
+    app: untappd-reborn
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80

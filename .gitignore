@@ -1,0 +1,11 @@
+CLAUDE.md
+node_modules
+
+# macOS metadata
+._*
+.DS_Store
+.AppleDouble
+.Spotlight-V100
+.Trashes
+.fseventsd
+.TemporaryItems
