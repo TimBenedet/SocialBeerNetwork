@@ -63,6 +63,7 @@ function RecoCard({ beerId, why, onOpenBeer }) {
 }
 
 function FeedScreen({ onOpenBeer, onCheckin }) {
+  useDataVersion();
   const me = USERS.me;
   return (
     <div className="page">
@@ -117,6 +118,7 @@ window.BeerCard = BeerCard;
 const MOODS = ['Tous','Rafraîchissant','Réconfortant','Contemplatif','Festif','Aventureux','Énergisant'];
 
 function DiscoverScreen({ onOpenBeer }) {
+  useDataVersion();
   const [mood, setMood] = useState('Tous');
   const [q, setQ] = useState('');
 

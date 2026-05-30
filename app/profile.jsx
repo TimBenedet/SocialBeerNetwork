@@ -4,6 +4,7 @@ const { useState, useEffect, useRef } = React;
 
 /* ============================== PROFILE ============================== */
 function ProfileScreen({ onOpenBeer }) {
+  useDataVersion();
   const me = USERS.me;
   const journalCount = JOURNAL.reduce((n,g)=>n+(g.entries?.length||0),0);
   return (

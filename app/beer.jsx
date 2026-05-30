@@ -247,6 +247,24 @@ function PhotoField({ photo, setPhoto }) {
 
 const PLACES = ['Cave Saint-Georges','Le Houblon Vagabond','Chez soi','Terrasse du Quai'];
 
+// beer styles, paired with the glass hue used to render them
+const BEER_STYLES = [
+  { style:'IPA', hue:'gold' },
+  { style:'New England IPA', hue:'hazy' },
+  { style:'Pilsner', hue:'pale' },
+  { style:'Lager', hue:'pale' },
+  { style:'Stout', hue:'stout' },
+  { style:'Porter', hue:'brown' },
+  { style:'Ambrée', hue:'amber' },
+  { style:'Rousse', hue:'copper' },
+  { style:'Blonde', hue:'gold' },
+  { style:'Saison', hue:'gold' },
+  { style:'Sour / Acidulée', hue:'pink' },
+  { style:'Triple', hue:'gold' },
+  { style:'Brune', hue:'brown' },
+  { style:'Autre', hue:'amber' },
+];
+
 function CheckinModal({ beerId, variant, onClose }) {
   const isNew = !beerId;
   const [step, setStep] = useState(0);
@@ -256,16 +274,28 @@ function CheckinModal({ beerId, variant, onClose }) {
   const [sliders, setSliders] = useState({});
   const [note, setNote] = useState('');
   const [done, setDone] = useState(false);
+  const [saving, setSaving] = useState(false);
   // champs « nouvelle bière »
   const [name, setName] = useState('');
   const [brewery, setBrewery] = useState('');
+  const [style, setStyle] = useState('');
   const [photo, setPhoto] = useState(null);
   const [place, setPlace] = useState('');
+  // enregistrement du lieu sur la carte
+  const [saveOnMap, setSaveOnMap] = useState(false);
+  const [addr, setAddr] = useState('');
+  const [geoStatus, setGeoStatus] = useState(null); // null | 'loading' | 'notfound' | 'error'
 
   const beer = beerId ? beerById(beerId) : null;
   const brew = beer ? BREWERIES[beer.brewery] : null;
   const c = beer ? BEER_HUES[beer.hue] : null;
   const title = beer ? beer.name : (name.trim() || 'Nouvelle bière');
+
+  // existing custom venues (active user) — to know if the place is already mapped
+  const savedVenues = userStore.get('venues', []);
+  const placeKnown = !!place && savedVenues.some(v => v.name.toLowerCase() === place.trim().toLowerCase());
+  // a free-typed place that isn't on the map yet → offer to save it
+  const placeCanBeMapped = !!place.trim() && !placeKnown;
 
   const toggle = (which, val) => {
     const set = which==='feelings' ? [feelings,setFeelings] : [characters,setCharacters];
@@ -280,7 +310,56 @@ function CheckinModal({ beerId, variant, onClose }) {
   const phase = isNew ? step - 1 : step; // -1 = détails, 0 = verdict, 1 = ressenti, 2 = note
   const canNext = phase===-1 ? !!name.trim() : phase===0 ? !!verdict : true;
 
-  const finish = () => { setDone(true); setTimeout(onClose, 1400); };
+  // build the beer object for a brand-new beer
+  const buildBeer = () => {
+    if (beer) return beer;
+    const st = BEER_STYLES.find(s => s.style === style) || { style: style || 'Bière', hue: 'amber' };
+    const brewKey = brewery.trim() ? 'b-' + brewery.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-') : '';
+    return {
+      id: genId('beer'),
+      name: name.trim() || 'Bière sans nom',
+      style: st.style,
+      hue: st.hue,
+      brewery: brewKey,
+      glassFill: 0.82,
+      photo: photo || null,
+      feelings: [], characters: [], verdicts: {},
+    };
+  };
+
+  const finish = async () => {
+    if (saving) return;
+    setSaving(true);
+    const b = buildBeer();
+    // 1) persist the check-in (creates the beer in the carnet/feed too)
+    checkinStore.add({
+      id: genId('ci'),
+      createdAt: Date.now(),
+      beer: b,
+      breweryName: beer ? (BREWERIES[beer.brewery] || {}).name : (brewery.trim() || ''),
+      verdict,
+      feelings, characters,
+      note: note.trim(),
+      place: place.trim(),
+    });
+    // 2) optionally geocode the place and add it to the map (active user's venues)
+    if (saveOnMap && placeCanBeMapped) {
+      try {
+        const geo = await geocodePlace(addr.trim() || place.trim());
+        if (geo) {
+          const venues = userStore.get('venues', []);
+          venues.push({
+            id: 'u' + genId('v'), name: place.trim(), type: 'Autre',
+            area: geo.area, taps: 0, friends: 0, lat: geo.lat, lng: geo.lng,
+            hot: false, custom: true,
+          });
+          userStore.set('venues', venues);
+        }
+      } catch (e) { /* non-blocking: the check-in is already saved */ }
+    }
+    setDone(true);
+    setTimeout(onClose, 1400);
+  };
 
   if (done) {
     return (
@@ -344,6 +423,12 @@ function CheckinModal({ beerId, variant, onClose }) {
                   <input className="text-input" autoFocus placeholder="Ex. Brume du Matin" value={name} onChange={e=>setName(e.target.value)} />
                   <label className="field-lbl" style={{marginTop:16}}>Brasserie</label>
                   <input className="text-input" placeholder="Ex. Brasserie des Cimes" value={brewery} onChange={e=>setBrewery(e.target.value)} />
+                  <label className="field-lbl" style={{marginTop:16}}>Style</label>
+                  <div className="place-chips">
+                    {BEER_STYLES.map(s=>(
+                      <button key={s.style} type="button" className={'pick-tag sm' + (style===s.style?' sel':'')} onClick={()=>setStyle(style===s.style?'':s.style)}>{s.style}</button>
+                    ))}
+                  </div>
                   <label className="field-lbl" style={{marginTop:16}}>Où l'as-tu bue&nbsp;?</label>
                   <input className="text-input" placeholder="Un bar, une adresse, chez toi…" value={place} onChange={e=>setPlace(e.target.value)} />
                   <div className="place-chips">
@@ -392,11 +477,35 @@ function CheckinModal({ beerId, variant, onClose }) {
               <p style={{marginBottom:14,color:'var(--ink-soft)',fontSize:15}}>Un souvenir, une impression&nbsp;? <span style={{color:'var(--ink-faint)'}}>(optionnel)</span></p>
               <textarea className="note-input" placeholder="Ce soir-là, avec qui, ce que ça t'a évoqué…" value={note} onChange={e=>setNote(e.target.value)} />
               <div className="pick-cat">Où&nbsp;?</div>
-              <div className="pick-cloud">
+              <input className="text-input" placeholder="Un bar, une adresse, chez toi…" value={place}
+                onChange={e=>{ setPlace(e.target.value); setSaveOnMap(false); setGeoStatus(null); }} />
+              <div className="pick-cloud" style={{marginTop:10}}>
                 {PLACES.map(v=>(
-                  <button key={v} className={'pick-tag' + (place===v?' sel':'')} onClick={()=>setPlace(place===v?'':v)}>{v}</button>
+                  <button key={v} className={'pick-tag' + (place===v?' sel':'')} onClick={()=>{ setPlace(place===v?'':v); setSaveOnMap(false); }}>{v}</button>
                 ))}
               </div>
+
+              {placeKnown && (
+                <p className="map-hint"><Icon name="check" size={14}/> « {place} » est déjà sur ta carte.</p>
+              )}
+
+              {placeCanBeMapped && (
+                <div className="map-save-box">
+                  <label className="map-save-toggle">
+                    <input type="checkbox" checked={saveOnMap}
+                      onChange={e=>{ setSaveOnMap(e.target.checked); if(!e.target.checked) setGeoStatus(null); }} />
+                    <span><Icon name="pin" size={14}/> Enregistrer « {place.trim()} » sur la carte</span>
+                  </label>
+                  {saveOnMap && (
+                    <>
+                      <label className="field-lbl" style={{marginTop:12}}>Adresse à localiser</label>
+                      <input className="text-input" placeholder="12 rue de la République, Lyon"
+                        value={addr} onChange={e=>{ setAddr(e.target.value); if(geoStatus) setGeoStatus(null); }} />
+                      <p className="map-hint" style={{color:'var(--ink-faint)'}}>On géocode l'adresse à l'enregistrement pour la placer sur la carte.</p>
+                    </>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
@@ -409,7 +518,7 @@ function CheckinModal({ beerId, variant, onClose }) {
           {step>0 && <button className="btn" onClick={()=>setStep(step-1)}><Icon name="arrowL" size={15}/> Retour</button>}
           {step<lastStep
             ? <button className="btn dark" disabled={!canNext} style={{opacity:canNext?1:.4}} onClick={()=>canNext&&setStep(step+1)}>Continuer <Icon name="arrow" size={15}/></button>
-            : <button className="btn primary" onClick={finish}><Icon name="check" size={16}/> Enregistrer</button>}
+            : <button className="btn primary" onClick={finish} disabled={saving} style={{opacity:saving?.6:1}}><Icon name="check" size={16}/> {saving ? 'Enregistrement…' : 'Enregistrer'}</button>}
         </div>
       </div>
     </div>

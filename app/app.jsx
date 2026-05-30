@@ -51,7 +51,7 @@ function App() {
     if (!token) { setAuthed(false); return; }
     let cancelled = false;
     api.me(token)
-      .then(({ user }) => { if (cancelled) return; setActiveUser(user); setAuthed(true); })
+      .then(({ user }) => { if (cancelled) return; setActiveUser(user); checkinStore.hydrate(); setAuthed(true); })
       .catch(() => { if (cancelled) return; authStore.clear(); setAuthed(false); })
       .finally(() => { if (!cancelled) forceUser(n => n + 1); });
     return () => { cancelled = true; };
@@ -60,6 +60,7 @@ function App() {
   const handleLogin = (token, user) => {
     authStore.setToken(token);
     setActiveUser(user);
+    checkinStore.hydrate(); // load this user's saved check-ins into BEERS/FEED/JOURNAL
     setRoute('feed');
     setOpenBeer(null);
     setAuthed(true);
@@ -69,6 +70,8 @@ function App() {
   const handleLogout = () => {
     api.logout(authStore.getToken());
     authStore.clear();
+    // clear the in-memory data so the next user doesn't briefly see ours
+    BEERS.length = 0; FEED.length = 0; JOURNAL.length = 0;
     setAuthed(false);
     setRoute('feed');
     setOpenBeer(null);
