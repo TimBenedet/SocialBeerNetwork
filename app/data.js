@@ -94,8 +94,116 @@ const authStore = {
   clear() { this.setToken(null); },
 };
 
+/* --- Data version ----------------------------------------------------------
+ * Screens read the module-level arrays (BEERS/FEED/JOURNAL) directly. After a
+ * mutation we bump this version and notify subscribers so they re-render.
+ */
+let DATA_VERSION = 0;
+const dataListeners = new Set();
+function bumpData() { DATA_VERSION++; dataListeners.forEach(fn => { try { fn(DATA_VERSION); } catch (e) {} }); }
+function onDataChange(fn) { dataListeners.add(fn); return () => dataListeners.delete(fn); }
+
+// React hook: re-render the calling component whenever the per-user data
+// changes. Defined here (a plain global) so every Babel-compiled screen file
+// can call it by bare identifier regardless of script load order.
+function useDataVersion() {
+  const R = window.React;
+  const [, setV] = R.useState(0);
+  R.useEffect(() => onDataChange(v => setV(v)), []);
+}
+
+/* --- Check-ins (the source of truth for user-added beers) -------------------
+ * Persisted per user under `ur:<key>:checkins`. Each check-in carries its own
+ * beer definition so the carnet/feed can render it without a separate catalog.
+ */
+function genId(prefix) {
+  return prefix + '-' + Math.random().toString(36).slice(2, 9);
+}
+
+const MONTHS_FR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+function monthLabel(ts) {
+  const d = new Date(ts);
+  const m = MONTHS_FR[d.getMonth()];
+  return m.charAt(0).toUpperCase() + m.slice(1) + ' ' + d.getFullYear();
+}
+function dayLabel(ts) {
+  const d = new Date(ts);
+  return d.getDate() + ' ' + MONTHS_FR[d.getMonth()].slice(0, 4) + '.';
+}
+function relTime(ts) {
+  const diff = Date.now() - ts;
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return "à l'instant";
+  if (min < 60) return `il y a ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `il y a ${h} h`;
+  const days = Math.floor(h / 24);
+  if (days === 1) return 'hier';
+  if (days < 7) return `il y a ${days} j`;
+  return dayLabel(ts);
+}
+
+// Rebuild BEERS / FEED / JOURNAL (in place) from the active user's check-ins.
+function rebuildFromCheckins(checkins) {
+  BEERS.length = 0;
+  FEED.length = 0;
+  JOURNAL.length = 0;
+  Object.keys(BREWERIES).forEach(k => delete BREWERIES[k]);
+
+  // newest first
+  const sorted = checkins.slice().sort((a, b) => b.createdAt - a.createdAt);
+
+  const monthMap = new Map();
+  sorted.forEach(ci => {
+    const beer = ci.beer;
+    if (beer && !beerById(beer.id)) BEERS.push(beer);
+    if (beer && beer.brewery && ci.breweryName && !BREWERIES[beer.brewery]) {
+      BREWERIES[beer.brewery] = { name: ci.breweryName, city: ci.breweryCity || '' };
+    }
+    FEED.push({
+      id: ci.id, user: 'me', beerId: beer ? beer.id : null, verdict: ci.verdict,
+      time: relTime(ci.createdAt), feelings: ci.feelings || [], characters: ci.characters || [],
+      note: ci.note || '', venue: ci.place || '', mine: true,
+    });
+    const ml = monthLabel(ci.createdAt);
+    if (!monthMap.has(ml)) { const g = { month: ml, entries: [] }; monthMap.set(ml, g); JOURNAL.push(g); }
+    monthMap.get(ml).entries.push({
+      beerId: beer ? beer.id : null, verdict: ci.verdict, date: dayLabel(ci.createdAt),
+      feelings: ci.feelings || [], characters: ci.characters || [],
+    });
+  });
+}
+
+const checkinStore = {
+  all() { return userStore.get('checkins', []); },
+  // Load the active user's check-ins into the live arrays. Call after login.
+  hydrate() { rebuildFromCheckins(this.all()); bumpData(); },
+  add(checkin) {
+    const list = this.all();
+    list.push(checkin);
+    userStore.set('checkins', list);
+    rebuildFromCheckins(list);
+    bumpData();
+    return checkin;
+  },
+};
+
+/* --- Geocoding (shared by the map + the check-in place step) ---------------- */
+async function geocodePlace(query) {
+  const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&addressdetails=1&q=' + encodeURIComponent(query);
+  const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+  const data = await res.json();
+  if (!data || !data.length) return null;
+  const r = data[0];
+  const a = r.address || {};
+  const area = a.suburb || a.neighbourhood || a.city_district || a.city || a.town || a.village
+    || (r.display_name.split(',')[1] || '').trim() || 'Adresse';
+  return { area, lat: parseFloat(r.lat), lng: parseFloat(r.lon), display: r.display_name };
+}
+
 Object.assign(window, {
   BEER_HUES, VERDICTS, FEELINGS, CHARACTERS, USERS, setActiveUser, BREWERIES, BEERS,
   beerById, FEED, VENUES, BADGES, CHALLENGES, JOURNAL, ME_TASTE,
-  userStore, authStore,
+  userStore, authStore, checkinStore, geocodePlace,
+  bumpData, onDataChange, useDataVersion, genId,
 });
