@@ -220,31 +220,26 @@ function AddVenueForm({ onAdd, onSave, onClose, editing }) {
 }
 
 function MapScreen() {
-  useDataVersion();
-  const loadVenues = () => [...VENUES, ...venueStore.all()];
-  const [venues, setVenues] = useState(loadVenues);
+  useDataVersion(); // re-render when venues change (incl. async server load)
+  const venues = [...VENUES, ...venueStore.all()];
   const [active, setActive] = useState(() => (venues[0] ? venues[0].id : null));
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState(null); // venue being edited, or null
 
   const addVenue = (v) => {
-    const next = [...venueStore.all(), v];
-    venueStore.save(next);
-    setVenues(loadVenues());
+    venueStore.save([...venueStore.all(), v]);
     setActive(v.id);
   };
 
   const saveVenue = (id, patch) => {
     venueStore.update(id, patch);
-    setVenues(loadVenues());
     setActive(id);
   };
 
   const removeVenue = (v) => {
     if (!window.confirm(`Supprimer « ${v.name} » de ta carte ?`)) return;
     venueStore.remove(v.id);
-    const next = loadVenues();
-    setVenues(next);
+    const next = [...VENUES, ...venueStore.all()];
     if (active === v.id) setActive(next[0] ? next[0].id : null);
   };
 
