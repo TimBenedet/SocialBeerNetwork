@@ -620,3 +620,8 @@ input, textarea { font-family: inherit; }
   margin:12px 0 0; font-size:13px; color:var(--accent-ink);
 }
 .map-hint svg{ flex:none; }
+
+/* ===================== Edit/Delete actions ===================== */
+.venue-actions{ display:flex; gap:10px; margin-top:8px; }
+.ci-act.danger{ color:var(--v-never, #C0492F); }
+.ci-act.danger:hover{ color:#a23a26; }

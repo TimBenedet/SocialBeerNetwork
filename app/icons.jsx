@@ -36,6 +36,7 @@ const Icon = ({ name, size, style, className }) => {
     check:   <><path d="M4 12.5 9 17 20 6"/></>,
     bell:    <><path d="M18 9a6 6 0 1 0-12 0c0 7-2 8-2 8h16s-2-1-2-8z"/><path d="M10.5 20a2 2 0 0 0 3 0"/></>,
     pen:     <><path d="M16 4 20 8 9 19l-4.5 1.2L6 16z"/></>,
+    trash:   <><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13M10 11v6M14 11v6"/></>,
     camera:  <><path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2L8 5h8l1.5 2h2A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/><circle cx="12" cy="13" r="3.4"/></>,
     sun:     <><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/></>,
   };

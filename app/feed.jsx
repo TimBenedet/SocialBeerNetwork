@@ -1,15 +1,87 @@
 /* untappdReborn — Feed + Discover ----------------------------------------- */
 const { useState } = React;
 
+/* ---- Edit an existing check-in (verdict / feelings / characters / note / place) ---- */
+const EDIT_VERDICTS = ['love','again','fine','meh','never'];
+function EditCheckinModal({ item, onClose }) {
+  const beer = beerById(item.beerId);
+  const [verdict, setVerdict] = useState(item.verdict || null);
+  const [feelings, setFeelings] = useState(item.feelings || []);
+  const [characters, setCharacters] = useState(item.characters || []);
+  const [note, setNote] = useState(item.note || '');
+  const [place, setPlace] = useState(item.venue || '');
+
+  const toggle = (arr, fn, val) => fn(arr.includes(val) ? arr.filter(x=>x!==val) : [...arr, val]);
+
+  const save = () => {
+    checkinStore.update(item.id, { verdict, feelings, characters, note: note.trim(), place: place.trim() });
+    onClose();
+  };
+
+  return (
+    <div className="scrim" onClick={onClose}>
+      <div className="modal" onClick={e=>e.stopPropagation()}>
+        <div className="modal-head">
+          <div>
+            <div className="step">Modifier le check-in</div>
+            <h3>{beer ? beer.name : 'Dégustation'}</h3>
+          </div>
+          <button className="modal-close" onClick={onClose}><Icon name="close" size={20}/></button>
+        </div>
+        <div className="modal-body">
+          <div className="pick-cat" style={{marginTop:0}}>Ton verdict</div>
+          <div className="verdict-grid">
+            {EDIT_VERDICTS.map(v => (
+              <button key={v} className={'verdict-pick' + (verdict===v?' sel':'')} onClick={()=>setVerdict(v)}>
+                <span className="em"><VerdictGlyph v={v} size={34} /></span>
+                <span className="lbl">{VERDICTS[v].label}</span>
+              </button>
+            ))}
+          </div>
+          <div className="pick-cat">Ressenti</div>
+          <div className="pick-cloud">
+            {FEELINGS.map(f => (
+              <button key={f} className={'pick-tag accent' + (feelings.includes(f)?' sel':'')} onClick={()=>toggle(feelings,setFeelings,f)}>{f}</button>
+            ))}
+          </div>
+          <div className="pick-cat">Caractère</div>
+          <div className="pick-cloud">
+            {CHARACTERS.map(f => (
+              <button key={f} className={'pick-tag' + (characters.includes(f)?' sel':'')} onClick={()=>toggle(characters,setCharacters,f)}>{f}</button>
+            ))}
+          </div>
+          <div className="pick-cat">Ta note</div>
+          <textarea className="note-input" placeholder="Un souvenir, une impression…" value={note} onChange={e=>setNote(e.target.value)} />
+          <div className="pick-cat">Où&nbsp;?</div>
+          <input className="text-input" placeholder="Un bar, une adresse, chez toi…" value={place} onChange={e=>setPlace(e.target.value)} />
+        </div>
+        <div className="modal-foot">
+          <div className="spacer"></div>
+          <button className="btn" onClick={onClose}>Annuler</button>
+          <button className="btn primary" onClick={save}><Icon name="check" size={16}/> Enregistrer</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+window.EditCheckinModal = EditCheckinModal;
 
 /* ============================== FEED ============================== */
 function CheckinCard({ item, onOpenBeer }) {
   const u = USERS[item.user];
   const beer = beerById(item.beerId);
+  const [editing, setEditing] = useState(false);
   if (!beer) return null;
   const brew = BREWERIES[beer.brewery] || { name:'', city:'' };
+
+  const remove = () => {
+    if (!window.confirm(`Supprimer ta dégustation de « ${beer.name} » ?`)) return;
+    checkinStore.remove(item.id);
+  };
+
   return (
     <article className="checkin">
+      {editing && <EditCheckinModal item={item} onClose={()=>setEditing(false)} />}
       <div className="ci-head">
         <Avatar user={u} size={42} />
         <div className="ci-who">
@@ -25,7 +97,7 @@ function CheckinCard({ item, onOpenBeer }) {
         <div>
           <div className="ci-beer-style">{beer.style}</div>
           <h3 className="ci-beer-name" style={{cursor:'pointer'}} onClick={()=>onOpenBeer(beer.id)}>{beer.name}</h3>
-          <div className="ci-brewery">{brew.name} · {brew.city}</div>
+          <div className="ci-brewery">{brew.name}{brew.city ? ` · ${brew.city}` : ''}</div>
           <div className="ci-tags">
             {item.feelings.map(f => <Tag key={f} variant="tint">{f}</Tag>)}
             {item.characters.map(c => <Tag key={c}><span className="dot"></span>{c}</Tag>)}
@@ -34,10 +106,10 @@ function CheckinCard({ item, onOpenBeer }) {
         </div>
       </div>
       <div className="ci-foot">
-        <span className="ci-venue"><Icon name="pin" size={15}/> {item.venue}</span>
+        {item.venue && <span className="ci-venue"><Icon name="pin" size={15}/> {item.venue}</span>}
         <div className="ci-actions">
-          <button className="ci-act"><Icon name="pen" size={15} /> Modifier</button>
-          <button className="ci-act"><Icon name="bookmark" /></button>
+          <button className="ci-act" onClick={()=>setEditing(true)}><Icon name="pen" size={15} /> Modifier</button>
+          <button className="ci-act danger" onClick={remove}><Icon name="trash" size={15} /> Supprimer</button>
         </div>
       </div>
     </article>

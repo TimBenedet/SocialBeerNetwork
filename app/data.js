@@ -186,6 +186,43 @@ const checkinStore = {
     bumpData();
     return checkin;
   },
+  update(id, patch) {
+    const list = this.all().map(ci => {
+      if (ci.id !== id) return ci;
+      const next = Object.assign({}, ci, patch);
+      // keep the embedded beer in sync if beer fields were edited
+      if (patch.beer) next.beer = Object.assign({}, ci.beer, patch.beer);
+      return next;
+    });
+    userStore.set('checkins', list);
+    rebuildFromCheckins(list);
+    bumpData();
+  },
+  remove(id) {
+    const list = this.all().filter(ci => ci.id !== id);
+    userStore.set('checkins', list);
+    rebuildFromCheckins(list);
+    bumpData();
+  },
+};
+
+/* --- Venues (saved map places) --------------------------------------------
+ * Custom venues live under `ur:<key>:venues`. update/remove operate on that
+ * list and notify subscribers so the map re-renders.
+ */
+const venueStore = {
+  all() { return userStore.get('venues', []); },
+  save(list) { userStore.set('venues', list.filter(v => v.custom)); bumpData(); },
+  update(id, patch) {
+    const list = this.all().map(v => v.id === id ? Object.assign({}, v, patch) : v);
+    this.save(list);
+    return list;
+  },
+  remove(id) {
+    const list = this.all().filter(v => v.id !== id);
+    this.save(list);
+    return list;
+  },
 };
 
 /* --- Geocoding (shared by the map + the check-in place step) ---------------- */
@@ -204,6 +241,6 @@ async function geocodePlace(query) {
 Object.assign(window, {
   BEER_HUES, VERDICTS, FEELINGS, CHARACTERS, USERS, setActiveUser, BREWERIES, BEERS,
   beerById, FEED, VENUES, BADGES, CHALLENGES, JOURNAL, ME_TASTE,
-  userStore, authStore, checkinStore, geocodePlace,
+  userStore, authStore, checkinStore, venueStore, geocodePlace,
   bumpData, onDataChange, useDataVersion, genId,
 });

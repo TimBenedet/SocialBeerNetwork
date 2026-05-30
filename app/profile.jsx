@@ -156,49 +156,50 @@ window.BadgesScreen = BadgesScreen;
 /* ============================== MAP ============================== */
 const VENUE_TYPES = ['Bar à bières', 'Brasserie · Taproom', 'Cave à bières', 'Restaurant', 'Autre'];
 
-function AddVenueForm({ onAdd, onClose, existing }) {
-  const [name, setName] = useState('');
+function AddVenueForm({ onAdd, onSave, onClose, editing }) {
+  const isEdit = !!editing;
+  const [name, setName] = useState(editing ? editing.name : '');
   const [addr, setAddr] = useState('');
-  const [type, setType] = useState(VENUE_TYPES[0]);
+  const [type, setType] = useState(editing ? (editing.type || VENUE_TYPES[0]) : VENUE_TYPES[0]);
   const [status, setStatus] = useState(null); // null | 'loading' | 'notfound' | 'error'
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!name.trim() || !addr.trim() || status === 'loading') return;
+    if (!name.trim() || status === 'loading') return;
+    // edit without a new address → just update name/type, keep coords
+    if (isEdit && !addr.trim()) {
+      onSave(editing.id, { name: name.trim(), type });
+      onClose();
+      return;
+    }
+    if (!isEdit && !addr.trim()) return; // new venue needs an address
     setStatus('loading');
     try {
-      const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&addressdetails=1&q=' + encodeURIComponent(addr);
-      const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-      const data = await res.json();
-      if (!data || !data.length) { setStatus('notfound'); return; }
-      const r = data[0];
-      const a = r.address || {};
-      const area = a.suburb || a.neighbourhood || a.city_district || a.city || a.town || a.village || (r.display_name.split(',')[1] || '').trim() || 'Adresse';
-      onAdd({
-        id: 'u' + Date.now(),
-        name: name.trim(),
-        type,
-        area,
-        taps: 0,
-        friends: 0,
-        lat: parseFloat(r.lat),
-        lng: parseFloat(r.lon),
-        hot: false,
-        custom: true,
-      });
+      const geo = await geocodePlace(addr.trim());
+      if (!geo) { setStatus('notfound'); return; }
+      if (isEdit) {
+        onSave(editing.id, { name: name.trim(), type, area: geo.area, lat: geo.lat, lng: geo.lng });
+      } else {
+        onAdd({
+          id: 'u' + genId('v'),
+          name: name.trim(), type, area: geo.area,
+          taps: 0, friends: 0, lat: geo.lat, lng: geo.lng,
+          hot: false, custom: true,
+        });
+      }
       onClose();
     } catch (err) {
       setStatus('error');
     }
   };
 
-  const disabled = status === 'loading' || !name.trim() || !addr.trim();
+  const disabled = status === 'loading' || !name.trim() || (!isEdit && !addr.trim());
   return (
     <form className="add-venue" onSubmit={submit}>
-      <div className="av-title"><Icon name="pin" size={15}/> Ajouter un lieu</div>
+      <div className="av-title"><Icon name="pin" size={15}/> {isEdit ? 'Modifier le lieu' : 'Ajouter un lieu'}</div>
       <label className="field-lbl">Nom du lieu</label>
       <input className="text-input" placeholder="Ex. Le Comptoir des Brasseurs" value={name} onChange={e=>setName(e.target.value)} autoFocus />
-      <label className="field-lbl" style={{marginTop:12}}>Adresse</label>
+      <label className="field-lbl" style={{marginTop:12}}>Adresse {isEdit && <span style={{textTransform:'none',fontWeight:500,color:'var(--ink-faint)'}}>(laisse vide pour garder l'actuelle)</span>}</label>
       <input className="text-input" placeholder="12 rue de la République, Lyon" value={addr} onChange={e=>{setAddr(e.target.value); if(status)setStatus(null);}} />
       <label className="field-lbl" style={{marginTop:12}}>Type</label>
       <div className="place-chips">
@@ -211,7 +212,7 @@ function AddVenueForm({ onAdd, onClose, existing }) {
       <div className="av-actions">
         <button type="button" className="btn sm" onClick={onClose}>Annuler</button>
         <button type="submit" className="btn dark sm" disabled={disabled} style={{opacity:disabled?.5:1}}>
-          {status==='loading' ? 'Recherche…' : <>Localiser <Icon name="arrow" size={14}/></>}
+          {status==='loading' ? 'Recherche…' : (isEdit ? <>Enregistrer <Icon name="check" size={14}/></> : <>Localiser <Icon name="arrow" size={14}/></>)}
         </button>
       </div>
     </form>
@@ -219,19 +220,36 @@ function AddVenueForm({ onAdd, onClose, existing }) {
 }
 
 function MapScreen() {
-  const [venues, setVenues] = useState(() => {
-    const saved = userStore.get('venues', []);
-    return [...VENUES, ...saved];
-  });
+  useDataVersion();
+  const loadVenues = () => [...VENUES, ...venueStore.all()];
+  const [venues, setVenues] = useState(loadVenues);
   const [active, setActive] = useState(() => (venues[0] ? venues[0].id : null));
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState(null); // venue being edited, or null
 
   const addVenue = (v) => {
-    const next = [...venues, v];
-    setVenues(next);
+    const next = [...venueStore.all(), v];
+    venueStore.save(next);
+    setVenues(loadVenues());
     setActive(v.id);
-    userStore.set('venues', next.filter(x => x.custom));
   };
+
+  const saveVenue = (id, patch) => {
+    venueStore.update(id, patch);
+    setVenues(loadVenues());
+    setActive(id);
+  };
+
+  const removeVenue = (v) => {
+    if (!window.confirm(`Supprimer « ${v.name} » de ta carte ?`)) return;
+    venueStore.remove(v.id);
+    const next = loadVenues();
+    setVenues(next);
+    if (active === v.id) setActive(next[0] ? next[0].id : null);
+  };
+
+  const startEdit = (v) => { setEditing(v); setAdding(true); };
+  const closeForm = () => { setAdding(false); setEditing(null); };
 
   return (
     <div className="page">
@@ -240,13 +258,13 @@ function MapScreen() {
           <div className="page-kicker">Autour de toi</div>
           <h1 className="page-title">Bars & brasseries</h1>
         </div>
-        <button className={'btn ' + (adding ? '' : 'primary')} onClick={()=>setAdding(a=>!a)}>
+        <button className={'btn ' + (adding ? '' : 'primary')} onClick={()=>{ if(adding){closeForm();}else{setEditing(null);setAdding(true);} }}>
           <Icon name={adding?'close':'plus'} size={16}/> {adding ? 'Fermer' : 'Ajouter une adresse'}
         </button>
       </div>
       <div className="map-layout">
         <div className="map-list">
-          {adding && <AddVenueForm onAdd={addVenue} onClose={()=>setAdding(false)} existing={venues} />}
+          {adding && <AddVenueForm onAdd={addVenue} onSave={saveVenue} onClose={closeForm} editing={editing} />}
           {!venues.length && !adding && (
             <div style={{color:'var(--ink-mute)',padding:'24px 4px'}}>Aucun lieu enregistré. Ajoute une adresse pour la voir sur la carte.</div>
           )}
@@ -264,6 +282,12 @@ function MapScreen() {
                     {v.hot && <span style={{color:'var(--accent-ink)',fontWeight:700}}>● Animé</span>}
                   </>)}
                 </div>
+                {v.custom && (
+                  <div className="venue-actions">
+                    <button className="ci-act" onClick={(e)=>{ e.stopPropagation(); startEdit(v); }}><Icon name="pen" size={14}/> Modifier</button>
+                    <button className="ci-act danger" onClick={(e)=>{ e.stopPropagation(); removeVenue(v); }}><Icon name="trash" size={14}/> Supprimer</button>
+                  </div>
+                )}
               </div>
             </div>
           ))}
