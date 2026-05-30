@@ -69,23 +69,6 @@ const JOURNAL = [];
 
 const ME_TASTE = [];
 
-/* --- Per-user localStorage -------------------------------------------------
- * Profile data is partitioned by the active user so Timothée and Guest never
- * share state. Keys look like `ur:<userKey>:<name>`.
- */
-const userStore = {
-  key(name) { return `ur:${(USERS.me && USERS.me.key) || 'anon'}:${name}`; },
-  get(name, fallback) {
-    try {
-      const raw = localStorage.getItem(this.key(name));
-      return raw == null ? fallback : JSON.parse(raw);
-    } catch (e) { return fallback; }
-  },
-  set(name, value) {
-    try { localStorage.setItem(this.key(name), JSON.stringify(value)); } catch (e) {}
-  },
-};
-
 /* --- Session token ---------------------------------------------------------- */
 const AUTH_TOKEN_KEY = 'ur:auth:token';
 const authStore = {
@@ -174,54 +157,87 @@ function rebuildFromCheckins(checkins) {
   });
 }
 
+/* --- Remote store (server-side, the single source of truth) ----------------
+ * The user's { checkins, venues } live in SQLite on the backend so they follow
+ * the account across devices and origins. We keep a working copy in memory,
+ * loaded at login via GET /api/data and pushed back on every mutation via
+ * PUT /api/data. No localStorage for data — that's what made desktop/mobile
+ * (different origins) diverge. authStore (the token) stays in localStorage.
+ */
+const remote = {
+  checkins: [],
+  venues: [],
+  loaded: false,
+  _authHeader() {
+    const t = authStore.getToken();
+    return t ? { Authorization: `Bearer ${t}` } : {};
+  },
+  load() {
+    return fetch('/api/data', { headers: this._authHeader() })
+      .then(res => { if (!res.ok) throw new Error('load failed'); return res.json(); })
+      .then(d => {
+        this.checkins = Array.isArray(d.checkins) ? d.checkins : [];
+        this.venues = Array.isArray(d.venues) ? d.venues : [];
+        this.loaded = true;
+        rebuildFromCheckins(this.checkins);
+        bumpData();
+      });
+  },
+  persist() {
+    return fetch('/api/data', {
+      method: 'PUT',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, this._authHeader()),
+      body: JSON.stringify({ checkins: this.checkins, venues: this.venues }),
+    }).then(res => { if (!res.ok) throw new Error('save failed'); });
+  },
+  reset() { this.checkins = []; this.venues = []; this.loaded = false; },
+};
+
 const checkinStore = {
-  all() { return userStore.get('checkins', []); },
-  // Load the active user's check-ins into the live arrays. Call after login.
-  hydrate() { rebuildFromCheckins(this.all()); bumpData(); },
+  all() { return remote.checkins; },
+  // Load this user's data from the server. Call after login/session-restore.
+  hydrate() { return remote.load(); },
   add(checkin) {
-    const list = this.all();
-    list.push(checkin);
-    userStore.set('checkins', list);
-    rebuildFromCheckins(list);
+    remote.checkins = remote.checkins.concat([checkin]);
+    rebuildFromCheckins(remote.checkins);
     bumpData();
+    remote.persist().catch(() => {});
     return checkin;
   },
   update(id, patch) {
-    const list = this.all().map(ci => {
+    remote.checkins = remote.checkins.map(ci => {
       if (ci.id !== id) return ci;
       const next = Object.assign({}, ci, patch);
-      // keep the embedded beer in sync if beer fields were edited
       if (patch.beer) next.beer = Object.assign({}, ci.beer, patch.beer);
       return next;
     });
-    userStore.set('checkins', list);
-    rebuildFromCheckins(list);
+    rebuildFromCheckins(remote.checkins);
     bumpData();
+    remote.persist().catch(() => {});
   },
   remove(id) {
-    const list = this.all().filter(ci => ci.id !== id);
-    userStore.set('checkins', list);
-    rebuildFromCheckins(list);
+    remote.checkins = remote.checkins.filter(ci => ci.id !== id);
+    rebuildFromCheckins(remote.checkins);
     bumpData();
+    remote.persist().catch(() => {});
   },
 };
 
-/* --- Venues (saved map places) --------------------------------------------
- * Custom venues live under `ur:<key>:venues`. update/remove operate on that
- * list and notify subscribers so the map re-renders.
- */
+/* --- Venues (saved map places) — same server-backed store ------------------ */
 const venueStore = {
-  all() { return userStore.get('venues', []); },
-  save(list) { userStore.set('venues', list.filter(v => v.custom)); bumpData(); },
+  all() { return remote.venues; },
+  save(list) {
+    remote.venues = list.filter(v => v.custom);
+    bumpData();
+    remote.persist().catch(() => {});
+  },
   update(id, patch) {
-    const list = this.all().map(v => v.id === id ? Object.assign({}, v, patch) : v);
-    this.save(list);
-    return list;
+    this.save(remote.venues.map(v => v.id === id ? Object.assign({}, v, patch) : v));
+    return remote.venues;
   },
   remove(id) {
-    const list = this.all().filter(v => v.id !== id);
-    this.save(list);
-    return list;
+    this.save(remote.venues.filter(v => v.id !== id));
+    return remote.venues;
   },
 };
 
