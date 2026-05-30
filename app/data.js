@@ -241,6 +241,6 @@ async function geocodePlace(query) {
 Object.assign(window, {
   BEER_HUES, VERDICTS, FEELINGS, CHARACTERS, USERS, setActiveUser, BREWERIES, BEERS,
   beerById, FEED, VENUES, BADGES, CHALLENGES, JOURNAL, ME_TASTE,
-  userStore, authStore, checkinStore, venueStore, geocodePlace,
+  authStore, checkinStore, venueStore, remote, geocodePlace,
   bumpData, onDataChange, useDataVersion, genId,
 });

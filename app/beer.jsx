@@ -292,7 +292,7 @@ function CheckinModal({ beerId, variant, onClose }) {
   const title = beer ? beer.name : (name.trim() || 'Nouvelle bière');
 
   // existing custom venues (active user) — to know if the place is already mapped
-  const savedVenues = userStore.get('venues', []);
+  const savedVenues = venueStore.all();
   const placeKnown = !!place && savedVenues.some(v => v.name.toLowerCase() === place.trim().toLowerCase());
   // a free-typed place that isn't on the map yet → offer to save it
   const placeCanBeMapped = !!place.trim() && !placeKnown;
@@ -347,13 +347,12 @@ function CheckinModal({ beerId, variant, onClose }) {
       try {
         const geo = await geocodePlace(addr.trim() || place.trim());
         if (geo) {
-          const venues = userStore.get('venues', []);
-          venues.push({
+          const venues = venueStore.all().concat([{
             id: 'u' + genId('v'), name: place.trim(), type: 'Autre',
             area: geo.area, taps: 0, friends: 0, lat: geo.lat, lng: geo.lng,
             hot: false, custom: true,
-          });
-          userStore.set('venues', venues);
+          }]);
+          venueStore.save(venues);
         }
       } catch (e) { /* non-blocking: the check-in is already saved */ }
     }
