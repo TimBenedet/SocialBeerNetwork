@@ -30,7 +30,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: ghcr.io/timbenedet/socialbeernetwork-backend:main-0e9f437
+        image: ghcr.io/timbenedet/socialbeernetwork-backend:main-5c8f765
         imagePullPolicy: Always
         ports:
         - containerPort: 3001
