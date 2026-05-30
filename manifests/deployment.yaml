@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: ghcr.io/timbenedet/socialbeernetwork:main-59e59fa
+        image: ghcr.io/timbenedet/socialbeernetwork:main-0e9f437
         imagePullPolicy: Always
         ports:
         - containerPort: 80
