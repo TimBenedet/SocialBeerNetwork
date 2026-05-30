@@ -1,0 +1,14 @@
+{
+  "name": "socialbeernetwork-auth",
+  "version": "1.0.0",
+  "description": "Minimal auth backend for SocialBeerNetwork",
+  "private": true,
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

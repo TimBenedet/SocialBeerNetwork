@@ -219,10 +219,8 @@ function AddVenueForm({ onAdd, onClose, existing }) {
 
 function MapScreen() {
   const [venues, setVenues] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('ur_venues') || '[]');
-      return [...VENUES, ...saved];
-    } catch (e) { return VENUES; }
+    const saved = userStore.get('venues', []);
+    return [...VENUES, ...saved];
   });
   const [active, setActive] = useState(() => (venues[0] ? venues[0].id : null));
   const [adding, setAdding] = useState(false);
@@ -231,7 +229,7 @@ function MapScreen() {
     const next = [...venues, v];
     setVenues(next);
     setActive(v.id);
-    try { localStorage.setItem('ur_venues', JSON.stringify(next.filter(x => x.custom))); } catch (e) {}
+    userStore.set('venues', next.filter(x => x.custom));
   };
 
   return (

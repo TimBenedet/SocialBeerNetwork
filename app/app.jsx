@@ -40,6 +40,41 @@ function App() {
   const [openBeer, setOpenBeer] = useState(null);
   const [checkin, setCheckin] = useState({ open:false, beerId:null });
 
+  // --- auth/session ---
+  // authed: null = still checking a stored token, false = logged out, true = in
+  const [authed, setAuthed] = useState(null);
+  const [, forceUser] = useState(0); // bump to re-render after USERS.me changes
+
+  // restore a stored session on first load
+  useEffect(() => {
+    const token = authStore.getToken();
+    if (!token) { setAuthed(false); return; }
+    let cancelled = false;
+    api.me(token)
+      .then(({ user }) => { if (cancelled) return; setActiveUser(user); setAuthed(true); })
+      .catch(() => { if (cancelled) return; authStore.clear(); setAuthed(false); })
+      .finally(() => { if (!cancelled) forceUser(n => n + 1); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleLogin = (token, user) => {
+    authStore.setToken(token);
+    setActiveUser(user);
+    setRoute('feed');
+    setOpenBeer(null);
+    setAuthed(true);
+    forceUser(n => n + 1);
+  };
+
+  const handleLogout = () => {
+    api.logout(authStore.getToken());
+    authStore.clear();
+    setAuthed(false);
+    setRoute('feed');
+    setOpenBeer(null);
+    forceUser(n => n + 1);
+  };
+
   // apply tweaks to CSS vars
   useEffect(() => {
     const r = document.documentElement.style;
@@ -54,6 +89,15 @@ function App() {
   const goBeer = (id) => { setOpenBeer(id); window.scrollTo(0,0); };
   const nav = (id) => { setRoute(id); setOpenBeer(null); window.scrollTo(0,0); };
   const startCheckin = (beerId=null) => setCheckin({ open:true, beerId });
+
+  // checking a stored token — keep it blank for a beat to avoid a login flash
+  if (authed === null) {
+    return <div className="login-wrap" />;
+  }
+  // not logged in → only the login screen
+  if (!authed) {
+    return <LoginScreen onLogin={handleLogin} />;
+  }
 
   let screen;
   if (openBeer) {
@@ -91,13 +135,18 @@ function App() {
         <button className="checkin-btn" onClick={()=>startCheckin()}>
           <Icon name="plus" size={18}/> Nouvelle bière
         </button>
-        <button className="me-card" onClick={()=>nav('profile')}>
-          <Avatar user="me" size={38}/>
-          <div style={{textAlign:'left'}}>
-            <div className="name">{USERS.me.name}</div>
-            <div className="sub">{USERS.me.handle}</div>
-          </div>
-        </button>
+        <div className="me-row">
+          <button className="me-card" onClick={()=>nav('profile')}>
+            <Avatar user="me" size={38}/>
+            <div style={{textAlign:'left'}}>
+              <div className="name">{USERS.me.name}</div>
+              <div className="sub">{USERS.me.handle}</div>
+            </div>
+          </button>
+          <button className="btn icon ghost logout-btn" title="Se déconnecter" onClick={handleLogout}>
+            <Icon name="arrow" size={18}/>
+          </button>
+        </div>
       </nav>
 
       {/* ---- main ---- */}
