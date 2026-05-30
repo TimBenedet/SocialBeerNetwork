@@ -342,10 +342,13 @@ function CheckinModal({ beerId, variant, onClose }) {
       note: note.trim(),
       place: place.trim(),
     });
-    // 2) optionally geocode the place and add it to the map (active user's venues)
+    // 2) optionally geocode the address and add the venue to the map.
+    //    The map marker is named after `place` (the venue name); `addr` is only
+    //    the geocoding query so the pin lands at the right spot.
     if (saveOnMap && placeCanBeMapped) {
+      const query = addr.trim() || place.trim();
       try {
-        const geo = await geocodePlace(addr.trim() || place.trim());
+        const geo = await geocodePlace(query);
         if (geo) {
           const venues = venueStore.all().concat([{
             id: 'u' + genId('v'), name: place.trim(), type: 'Autre',
@@ -353,8 +356,17 @@ function CheckinModal({ beerId, variant, onClose }) {
             hot: false, custom: true,
           }]);
           venueStore.save(venues);
+        } else {
+          // address not found → keep the modal open so the user can fix it
+          setGeoStatus('notfound');
+          setSaving(false);
+          return;
         }
-      } catch (e) { /* non-blocking: the check-in is already saved */ }
+      } catch (e) {
+        setGeoStatus('error');
+        setSaving(false);
+        return;
+      }
     }
     setDone(true);
     setTimeout(onClose, 1400);
@@ -428,13 +440,35 @@ function CheckinModal({ beerId, variant, onClose }) {
                       <button key={s.style} type="button" className={'pick-tag sm' + (style===s.style?' sel':'')} onClick={()=>setStyle(style===s.style?'':s.style)}>{s.style}</button>
                     ))}
                   </div>
-                  <label className="field-lbl" style={{marginTop:16}}>Où l'as-tu bue&nbsp;?</label>
-                  <input className="text-input" placeholder="Un bar, une adresse, chez toi…" value={place} onChange={e=>setPlace(e.target.value)} />
+                  <label className="field-lbl" style={{marginTop:16}}>Où l'as-tu bue&nbsp;? <span style={{textTransform:'none',fontWeight:500,color:'var(--ink-faint)'}}>· le nom du lieu</span></label>
+                  <input className="text-input" placeholder="Ex. Le Comptoir des Brasseurs, chez toi…" value={place} onChange={e=>setPlace(e.target.value)} />
                   <div className="place-chips">
                     {PLACES.map(v=>(
                       <button key={v} type="button" className={'pick-tag sm' + (place===v?' sel':'')} onClick={()=>setPlace(place===v?'':v)}>{v}</button>
                     ))}
                   </div>
+                  {placeCanBeMapped && (
+                    <div className="map-save-box">
+                      <label className="map-save-toggle">
+                        <input type="checkbox" checked={saveOnMap}
+                          onChange={e=>{ setSaveOnMap(e.target.checked); if(!e.target.checked) setGeoStatus(null); }} />
+                        <span><Icon name="pin" size={14}/> Placer « {place.trim()} » sur la carte</span>
+                      </label>
+                      {saveOnMap && (
+                        <>
+                          <label className="field-lbl" style={{marginTop:12}}>Adresse du lieu</label>
+                          <input className="text-input" placeholder="12 rue de la République, Lyon"
+                            value={addr} onChange={e=>{ setAddr(e.target.value); if(geoStatus) setGeoStatus(null); }} />
+                          <p className="map-hint" style={{color:'var(--ink-faint)'}}>L'adresse sert à localiser le lieu ; c'est le nom ci-dessus qui s'affichera sur la carte.</p>
+                          {geoStatus==='notfound' && <p className="av-msg">Adresse introuvable — précise la rue et la ville.</p>}
+                          {geoStatus==='error' && <p className="av-msg">Impossible de localiser pour le moment.</p>}
+                        </>
+                      )}
+                    </div>
+                  )}
+                  {placeKnown && (
+                    <p className="map-hint"><Icon name="check" size={14}/> « {place} » est déjà sur ta carte.</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -475,9 +509,10 @@ function CheckinModal({ beerId, variant, onClose }) {
             <>
               <p style={{marginBottom:14,color:'var(--ink-soft)',fontSize:15}}>Un souvenir, une impression&nbsp;? <span style={{color:'var(--ink-faint)'}}>(optionnel)</span></p>
               <textarea className="note-input" placeholder="Ce soir-là, avec qui, ce que ça t'a évoqué…" value={note} onChange={e=>setNote(e.target.value)} />
-              <div className="pick-cat">Où&nbsp;?</div>
-              <input className="text-input" placeholder="Un bar, une adresse, chez toi…" value={place}
-                onChange={e=>{ setPlace(e.target.value); setSaveOnMap(false); setGeoStatus(null); }} />
+
+              <div className="pick-cat">Nom du lieu</div>
+              <input className="text-input" placeholder="Ex. Le Comptoir des Brasseurs, chez toi…" value={place}
+                onChange={e=>{ setPlace(e.target.value); if(!e.target.value.trim()){ setSaveOnMap(false); } setGeoStatus(null); }} />
               <div className="pick-cloud" style={{marginTop:10}}>
                 {PLACES.map(v=>(
                   <button key={v} className={'pick-tag' + (place===v?' sel':'')} onClick={()=>{ setPlace(place===v?'':v); setSaveOnMap(false); }}>{v}</button>
@@ -493,14 +528,16 @@ function CheckinModal({ beerId, variant, onClose }) {
                   <label className="map-save-toggle">
                     <input type="checkbox" checked={saveOnMap}
                       onChange={e=>{ setSaveOnMap(e.target.checked); if(!e.target.checked) setGeoStatus(null); }} />
-                    <span><Icon name="pin" size={14}/> Enregistrer « {place.trim()} » sur la carte</span>
+                    <span><Icon name="pin" size={14}/> Placer « {place.trim()} » sur la carte</span>
                   </label>
                   {saveOnMap && (
                     <>
-                      <label className="field-lbl" style={{marginTop:12}}>Adresse à localiser</label>
+                      <label className="field-lbl" style={{marginTop:12}}>Adresse du lieu</label>
                       <input className="text-input" placeholder="12 rue de la République, Lyon"
                         value={addr} onChange={e=>{ setAddr(e.target.value); if(geoStatus) setGeoStatus(null); }} />
-                      <p className="map-hint" style={{color:'var(--ink-faint)'}}>On géocode l'adresse à l'enregistrement pour la placer sur la carte.</p>
+                      <p className="map-hint" style={{color:'var(--ink-faint)'}}>L'adresse sert à localiser le lieu ; c'est le nom ci-dessus qui s'affichera sur la carte.</p>
+                      {geoStatus==='notfound' && <p className="av-msg">Adresse introuvable — précise la rue et la ville.</p>}
+                      {geoStatus==='error' && <p className="av-msg">Impossible de localiser pour le moment.</p>}
                     </>
                   )}
                 </div>
