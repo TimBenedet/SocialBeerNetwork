@@ -134,14 +134,82 @@ function RecoCard({ beerId, why, onOpenBeer }) {
   );
 }
 
+// Time-aware greeting + a little tongue-in-cheek beer quip for the hour.
+function beerGreeting(firstName) {
+  const now = new Date();
+  const h = now.getHours();
+  const hh = now.getHours();
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const time = `${hh}h${mm}`;
+  const who = firstName ? `, ${firstName}` : '';
+  const hello = h < 18 ? 'Bonjour' : 'Bonsoir';
+
+  let quips;
+  if (h < 6) {
+    // 0h–6h : nuit
+    quips = [
+      `${hello}${who}. Il est ${time}… soit il est très tard, soit très tôt. Dans les deux cas, hydrate-toi (à l'eau).`,
+      `${hello}${who}. À ${time}, même les brasseurs dorment. Va te coucher 😴`,
+      `${hello}${who}. Une petite dernière à ${time} ? Allez, on range le verre.`,
+    ];
+  } else if (h < 10) {
+    // 6h–10h : trop tôt
+    quips = [
+      `${hello}${who} ! Il est ${time}… Ah non, pas de bière avant 10h ! ☕`,
+      `${hello}${who}. ${time}, c'est l'heure du café, pas de la mousse. Patience !`,
+      `${hello}${who} ! On se calme, il n'est que ${time}. La bière t'attendra.`,
+    ];
+  } else if (h < 12) {
+    // 10h–12h : ça se discute
+    quips = [
+      `${hello}${who}. Il est ${time}… techniquement, c'est l'apéro quelque part dans le monde 🍺`,
+      `${hello}${who} ! ${time} : une petite blonde de fin de matinée, soyons fous ?`,
+      `${hello}${who}. Bientôt midi (${time}) — autant se préparer mentalement.`,
+    ];
+  } else if (h < 14) {
+    // 12h–14h : midi
+    quips = [
+      `${hello}${who} ! Il est ${time}, une petite bière pour accompagner le repas, non ? 🍺`,
+      `${hello}${who}. ${time}, l'heure de la pause… et d'une mousse bien méritée.`,
+      `${hello}${who} ! À ${time}, une blanche bien fraîche ferait l'affaire.`,
+    ];
+  } else if (h < 18) {
+    // 14h–18h : après-midi
+    quips = [
+      `${hello}${who}, il est ${time}, c'est une bonne heure pour une petite bière non ? 🍻`,
+      `${hello}${who}. ${time} : l'après-midi traîne… une IPA pour relancer la machine ?`,
+      `${hello}${who} ! À ${time}, le soleil est sûrement sous la barre quelque part. Santé !`,
+    ];
+  } else if (h < 22) {
+    // 18h–22h : l'heure sacrée
+    quips = [
+      `${hello}${who} ! ${time}, l'heure sacrée de l'apéro a sonné 🍺`,
+      `${hello}${who}. Il est ${time} : tu as bien mérité ta dégustation du soir.`,
+      `${hello}${who} ! ${time}, et si on goûtait quelque chose de nouveau ce soir ?`,
+    ];
+  } else {
+    // 22h–0h : tard
+    quips = [
+      `${hello}${who}. ${time}, la dernière tournée approche… choisis-la bien 🌙`,
+      `${hello}${who} ! Il est ${time} : une petite brune réconfortante avant la nuit ?`,
+      `${hello}${who}. ${time}, mode dégustation tranquille activé.`,
+    ];
+  }
+  // pick a quip that changes through the day (no Math.random in this codebase)
+  const idx = (now.getDate() + h) % quips.length;
+  return { hello: `${hello}${who}.`, quip: quips[idx] };
+}
+
 function FeedScreen({ onOpenBeer, onCheckin }) {
   useDataVersion();
   const me = USERS.me;
+  const firstName = me && me.name ? me.name.split(' ')[0] : '';
+  const { hello, quip } = beerGreeting(firstName);
   return (
     <div className="page">
       <div className="page-head">
-        <h1 className="page-title">Bonsoir{me && me.name ? `, ${me.name.split(' ')[0]}` : ''}.</h1>
-        <p className="page-sub">Tes dernières dégustations apparaîtront ici.</p>
+        <h1 className="page-title">{hello}</h1>
+        <p className="page-sub">{quip}</p>
       </div>
 
       <div className="feed-layout">
